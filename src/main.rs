@@ -43,6 +43,16 @@ enum Commands {
     }
 }
 
+//Defining needed Structs to generate routines and filters
+struct Routine{
+    
+}
+
+struct Filter{
+
+}
+
+
 fn main() {
     // 3. Parse the arguments from the terminal
     let cli = Cli::parse();
@@ -62,7 +72,7 @@ fn main() {
 fn createRoutine(name:&str, filter:bool){
 
     if(filter){
-        println!("I want to be a Filter");
+
         let filter_folder = "./filters";
 
         println!("A new filter named {} will be created at {}", name, filter_folder);
@@ -93,9 +103,9 @@ fn createRoutine(name:&str, filter:bool){
 //Delete Routine Function
 fn deleteRoutine(name:&str, all:bool){
     let routines_folder = "./routines";
-    let routines = fs::read_dir("./routines").unwrap();
-
-    //Logik für den all switch
+    let routines = fs::read_dir(routines_folder).unwrap();
+    
+    //Clearing the whole cleanR-data
     if all {
         for routine in routines {
             let entry = routine.unwrap();
@@ -104,11 +114,23 @@ fn deleteRoutine(name:&str, all:bool){
             println!("Deleting: {}", path.display());
         
         if let Err(e) = fs::remove_file(&path) {
-            eprintln!("Failed to delete {}: {}", path.display(), e);
+            eprintln!("Failed to delete routine {}: {}", path.display(), e);
         }
     }
-    }
+        let filter_folder = "./filters";
+        let filters = fs::read_dir(filter_folder).unwrap();
 
+        for filter in filters {
+            let entry = filter.unwrap();
+            let path = entry.path();
+        
+            println!("Deleting: {}", path.display());
+        
+        if let Err(e) = fs::remove_file(&path) {
+            eprintln!("Failed to delete routine {}: {}", path.display(), e);
+        }
+    }
+}
     //No name was put in 
     else{
         if(name == ""){
