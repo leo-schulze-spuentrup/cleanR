@@ -20,7 +20,14 @@ enum Commands {
 
         /// Name of the routine
         #[arg(short, long)]
-        name: String
+        name: String,
+        
+
+        /// Create a filter
+        #[arg(short, long)]
+        filter: bool
+
+
 
     },
     ///Delete one or more routines
@@ -42,8 +49,8 @@ fn main() {
 
     // 4. Match against the command to run your code
     match &cli.command{
-        Commands::Create {name } => {
-            createRoutine(name);
+        Commands::Create {name, filter } => {
+            createRoutine(name, *filter);
         }
         Commands::Delete {name,all} => {
             deleteRoutine(name, *all);
@@ -52,19 +59,35 @@ fn main() {
 }
 
 //Create Routine Function
-fn createRoutine(name:&str){
+fn createRoutine(name:&str, filter:bool){
 
-    let routines_folder = "./routines";
+    if(filter){
+        println!("I want to be a Filter");
+        let filter_folder = "./filters";
 
-    println!("A new routine named {} will be created at {}", name, routines_folder);
-    println!("Configurationprocess started ...");
+        println!("A new filter named {} will be created at {}", name, filter_folder);
+        println!("Configurationprocess started ...");
             
-    let file_path = format!("{}/{}{}", routines_folder, name, ".json");
-    print!("{}", file_path);
+        let file_path = format!("{}/{}{}", filter_folder, name, ".json");
+        print!("{}", file_path);
 
-    let _file = File::create(file_path).expect("File couldnt be created. Make sure the Directory exists!");
+        let _file = File::create(file_path).expect("File couldnt be created. Make sure the Directory exists!");
 
-    println!("Routine created!");
+        println!("Routine created!");
+    }
+    else{
+        let routines_folder = "./routines";
+
+        println!("A new routine named {} will be created at {}", name, routines_folder);
+        println!("Configurationprocess started ...");
+            
+        let file_path = format!("{}/{}{}", routines_folder, name, ".json");
+        print!("{}", file_path);
+
+        let _file = File::create(file_path).expect("File couldnt be created. Make sure the Directory exists!");
+
+        println!("Routine created!");
+    }
 }
 
 //Delete Routine Function
@@ -100,7 +123,5 @@ fn deleteRoutine(name:&str, all:bool){
                 eprintln!("Failed to delete {}: {}", path, e);
             }
         }
-
-
     }
 }
