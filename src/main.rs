@@ -51,15 +51,13 @@ enum Commands {
 struct Routine{
     name:String,
     description:String,
+    activated:String,
     repetition:String,
     whitelist:String,
     blacklist:String,
     exparation_date:String
 }
 
-struct Filter{
-
-}
 
 
 fn main() {
@@ -172,16 +170,19 @@ fn inputRoutine(name:&str) -> Routine{
     let whitelist: String = prompt("Enter deletioncriteria: ");
     let blacklist: String = prompt("Enter keepingcriteria: ");
     let exparation_date: String = prompt("Enter exparationdate: ");
+    let activated: String = "".to_string();
+
 
     let routine = Routine{
         name,
         description,
+        activated,
         repetition,
         whitelist,
         blacklist,
         exparation_date,
     };
-
+    
     return routine
 
 }
@@ -198,10 +199,13 @@ fn prompt(message: &str) -> String {
         if io::stdin().read_line(&mut input).is_ok() {
             let trimmed = input.trim();
             if !trimmed.is_empty() {
+                if(trimmed == "quit"){
+                    std::process::exit(1);
+                }
                 return trimmed.to_string();
             }
         }
 
-        println!("Input cannot be empty. Please try again.");
+        println!("Input cannot be empty. Exit: quit");
     }
 }
