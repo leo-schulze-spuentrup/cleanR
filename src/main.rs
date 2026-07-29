@@ -1,6 +1,9 @@
-use std::fs;
+use std::{fs, string};
 use std::fs::File;
 use clap::{Parser, Subcommand};
+use std::io::{self, Write};
+use serde::Serialize;
+use std::io::BufWriter;
 
 // 1. The main entry point for your CLI tool
 #[derive(Parser, Debug)]
@@ -44,8 +47,14 @@ enum Commands {
 }
 
 //Defining needed Structs to generate routines and filters
+#[derive(Serialize)]
 struct Routine{
-    
+    name:String,
+    description:String,
+    repetition:String,
+    whitelist:String,
+    blacklist:String,
+    exparation_date:String
 }
 
 struct Filter{
@@ -95,6 +104,13 @@ fn createRoutine(name:&str, filter:bool){
         print!("{}", file_path);
 
         let _file = File::create(file_path).expect("File couldnt be created. Make sure the Directory exists!");
+        
+        let writer = BufWriter::new(_file);
+
+        let routine:Routine = inputRoutine(name); 
+
+        serde_json::to_writer_pretty(writer, &routine);
+
 
         println!("Routine created!");
     }
@@ -145,5 +161,47 @@ fn deleteRoutine(name:&str, all:bool){
                 eprintln!("Failed to delete {}: {}", path, e);
             }
         }
+    }
+}
+
+//Get the Userinput and return a Routine Struct
+fn inputRoutine(name:&str) -> Routine{
+    let name:String= name.to_string();
+    let description:String = prompt("Enter description: ");
+    let repetition: String = prompt("Time of repetition: ");
+    let whitelist: String = prompt("Enter deletioncriteria: ");
+    let blacklist: String = prompt("Enter keepingcriteria: ");
+    let exparation_date: String = prompt("Enter exparationdate: ");
+
+    let routine = Routine{
+        name,
+        description,
+        repetition,
+        whitelist,
+        blacklist,
+        exparation_date,
+    };
+
+    return routine
+
+}
+
+fn prompt(message: &str) -> String {
+    let mut input = String::new();
+
+    loop {
+        print!("{}", message);
+        // Flush stdout so the prompt displays immediately before taking input
+        let _ = io::stdout().flush();
+
+        input.clear();
+        if io::stdin().read_line(&mut input).is_ok() {
+            let trimmed = input.trim();
+            if !trimmed.is_empty() {
+                return trimmed.to_string();
+            }
+        }
+
+        println!("Input cannot be empty. Please try again.");
     }
 }
