@@ -3,6 +3,11 @@ I want to create a opensource project to automaticlly and repeatetly delete or a
 
 ## Scheduled routines
 
-On Linux, install the `crontab` utility to schedule routines. Creating a routine asks for a five-field cron schedule, a directory to scan, and whitelist and blacklist glob patterns (one pattern per line, ending each list with a blank line). A routine deletes regular files recursively when their relative paths match the whitelist and do not match the blacklist.
+On Linux, install the `crontab` utility to schedule routines. Each routine uses a five-field cron schedule, a scan directory, and newline-separated whitelist and blacklist glob patterns. It recursively deletes regular files whose relative paths match the whitelist but not the blacklist.
 
-Use `cleanR activate --name <routine>` to register the routine in the current user's crontab. Run the same command again to deactivate it and remove its schedule. Cron invokes `cleanR run --name <routine>` at each scheduled time; this command does nothing unless the routine is still activated. Use `cleanR run-now --name <routine>` to execute it immediately, whether or not it is activated. Existing routine JSON files without a `target_directory` must be updated with a scan directory before they can run.
+Commands:
+- `cleanR activate --name <routine>`: Activate and schedule a routine; run again to deactivate and remove its schedule.
+- `cleanR run --name <routine>`: Run a scheduled routine once, only if it is activated. Cron invokes this command.
+- `cleanR run-now --name <routine>`: Run a routine immediately, whether or not it is activated.
+
+Existing routine JSON files without a `target_directory` need a scan directory before they can run.
