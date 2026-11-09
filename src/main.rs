@@ -1,4 +1,4 @@
-//! cleaner - manage cleaning routines stored as JSON files.
+//! cleanR - manage cleaning routines stored as JSON files.
 //!
 //! Commands: create, delete, modify, run.
 //!
@@ -7,7 +7,7 @@
 //! into an empty one. `run` skips routines that are not fully configured.
 //!
 //! Storage: one JSON file per routine, `<id>.json`, inside the routines directory.
-//! Directory resolution: `--dir` > `$CLEANER_HOME` > `~/.cleaner/routines`.
+//! Directory resolution: `--dir` > `$CLEANR_HOME` > `~/.cleanR/routines`.
 //!
 //! Routines are addressed by numeric id or by name. An id always wins, so purely
 //! numeric names are not allowed.
@@ -124,7 +124,7 @@ impl Routine {
 // ---------------------------------------------------------------------------
 
 #[derive(Parser)]
-#[command(name = "cleaner", version, about = "Manage and run cleaning routines")]
+#[command(name = "cleanR", version, about = "Manage and run cleaning routines")]
 struct Cli {
     /// Directory where routine JSON files are stored
     #[arg(long, global = true, value_name = "DIR")]
@@ -299,7 +299,7 @@ fn cmd_create(dir: &Path, a: CreateArgs) -> Result<()> {
         println!("Created empty routine:");
         routine.print();
         println!(
-            "Configure it with: cleaner modify {} --add-path <DIR> <rule options>",
+            "Configure it with: cleanR modify {} --add-path <DIR> <rule options>",
             routine.id
         );
         return Ok(());
@@ -759,13 +759,13 @@ fn confirm(prompt: &str) -> Result<bool> {
 fn store_dir(cli_dir: Option<PathBuf>) -> Result<PathBuf> {
     let dir = if let Some(d) = cli_dir {
         d
-    } else if let Some(d) = env::var_os("CLEANER_HOME") {
+    } else if let Some(d) = env::var_os("CLEANR_HOME") {
         PathBuf::from(d)
     } else {
         let home = env::var_os("HOME")
             .or_else(|| env::var_os("USERPROFILE"))
-            .ok_or("cannot determine home directory; use --dir or set CLEANER_HOME")?;
-        PathBuf::from(home).join(".cleaner").join("routines")
+            .ok_or("cannot determine home directory; use --dir or set CLEANR_HOME")?;
+        PathBuf::from(home).join(".cleanR").join("routines")
     };
     fs::create_dir_all(&dir).map_err(|e| format!("cannot create '{}': {e}", dir.display()))?;
     Ok(dir)

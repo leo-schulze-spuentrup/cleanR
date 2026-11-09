@@ -10,3 +10,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 globset = "0.4"
 walkdir = "2"
+
+[[bin]]
+name = "cleanR"
+path = "src/main.rs"

@@ -8,7 +8,7 @@ On Linux, install the `crontab` utility to schedule routines. Each routine uses 
 ## Commands
 
 ```
-cleaner [--dir <DIR>] <COMMAND>
+cleanR [--dir <DIR>] <COMMAND>
 ```
 
 | Command  | Purpose                                              |
@@ -18,13 +18,13 @@ cleaner [--dir <DIR>] <COMMAND>
 | `delete` | Delete one or more routines                          |
 | `run`    | Run all routines and delete the files they match     |
 
-Every command also accepts `-h`/`--help`. `cleaner -V`/`--version` prints the version.
+Every command also accepts `-h`/`--help`. `cleanR -V`/`--version` prints the version.
 
 ### Global options
 
 | Flag          | Description                                                                                       |
 |---------------|---------------------------------------------------------------------------------------------------|
-| `--dir <DIR>` | Directory where routine JSON files are stored. Default: `$CLEANER_HOME`, else `~/.cleaner/routines` |
+| `--dir <DIR>` | Directory where routine JSON files are stored. Default: `$CLEANR_HOME`, else `~/.cleanR/routines` |
 
 ### Selecting routines
 
@@ -51,8 +51,8 @@ Sizes accept plain bytes or a unit, with decimals allowed: `500`, `10KB`, `1.5GB
 Create a new routine.
 
 ```
-cleaner create <NAME> [OPTIONS]
-cleaner create <NAME> --empty [-d <TEXT>]
+cleanR create <NAME> [OPTIONS]
+cleanR create <NAME> --empty [-d <TEXT>]
 ```
 
 A normal `create` requires at least one `--path` and at least one rule. `--empty` is the only way to create a routine without them.
@@ -74,8 +74,8 @@ A normal `create` requires at least one `--path` and at least one rule. `--empty
 Examples:
 
 ```
-cleaner create "Old logs" -p ~/logs -r -e log -e tmp --older-than-days 30 --min-size 1MB
-cleaner create "Downloads" --empty -d "Configure later"
+cleanR create "Old logs" -p ~/logs -r -e log -e tmp --older-than-days 30 --min-size 1MB
+cleanR create "Downloads" --empty -d "Configure later"
 ```
 
 ---
@@ -85,7 +85,7 @@ cleaner create "Downloads" --empty -d "Configure later"
 Modify an existing routine. A modification can never leave a configured routine empty.
 
 ```
-cleaner modify <ID|NAME> [OPTIONS]
+cleanR modify <ID|NAME> [OPTIONS]
 ```
 
 | Argument / Flag                 | Description                                                                |
@@ -108,9 +108,9 @@ cleaner modify <ID|NAME> [OPTIONS]
 Examples:
 
 ```
-cleaner modify "Old logs" --older-than-days 14 --add-ext bak --remove-ext tmp --clear min-size
-cleaner modify 1 --name "Log cleanup" --recursive false
-cleaner modify Downloads --add-path ~/Downloads --older-than-days 60 --add-ext iso
+cleanR modify "Old logs" --older-than-days 14 --add-ext bak --remove-ext tmp --clear min-size
+cleanR modify 1 --name "Log cleanup" --recursive false
+cleanR modify Downloads --add-path ~/Downloads --older-than-days 60 --add-ext iso
 ```
 
 ---
@@ -120,7 +120,7 @@ cleaner modify Downloads --add-path ~/Downloads --older-than-days 60 --add-ext i
 Delete one or more routines. All selectors are resolved first, so if one is unknown, nothing is deleted. This removes the routine definitions, not any cleaned files.
 
 ```
-cleaner delete <ID|NAME>... [OPTIONS]
+cleanR delete <ID|NAME>... [OPTIONS]
 ```
 
 | Argument / Flag | Description                                  |
@@ -131,8 +131,8 @@ cleaner delete <ID|NAME>... [OPTIONS]
 Examples:
 
 ```
-cleaner delete 1 "Temp files"
-cleaner delete 2 3 --yes
+cleanR delete 1 "Temp files"
+cleanR delete 2 3 --yes
 ```
 
 ---
@@ -142,7 +142,7 @@ cleaner delete 2 3 --yes
 Run **all** stored routines and delete the files they match. There is no confirmation prompt, so it is safe to use in scheduled jobs.
 
 ```
-cleaner run [OPTIONS]
+cleanR run [OPTIONS]
 ```
 
 | Flag              | Description                                                     |
@@ -160,6 +160,6 @@ Behavior:
 Examples:
 
 ```
-cleaner run --dry-run
-cleaner run
+cleanR run --dry-run
+cleanR run
 ```
