@@ -1,6 +1,10 @@
 //! cleaner - manage cleaning routines stored as JSON files.
 //!
-//! Commands: create, delete, modify.
+//! Commands: create, delete, modify, run.
+//!
+//! `create --empty` is the ONLY way to produce an empty routine. A normal `create`
+//! requires at least one path and one rule, and `modify` can never turn a routine
+//! into an empty one. `run` skips routines that are not fully configured.
 //!
 //! Storage: one JSON file per routine, `<id>.json`, inside the routines directory.
 //! Directory resolution: `--dir` > `$CLEANER_HOME` > `~/.cleaner/routines`.
@@ -15,6 +19,7 @@ use std::{
     io::{self, Write},
     path::{Path, PathBuf},
     process::ExitCode,
+    time::{Duration, SystemTime},
 };
 
 type Result<T> = std::result::Result<T, String>;
@@ -73,6 +78,16 @@ impl Routine {
             || r.name_contains.is_some()
     }
 
+    /// No paths and no rules at all (what `create --empty` produces).
+    fn is_empty(&self) -> bool {
+        self.paths.is_empty() && !self.has_rules()
+    }
+
+    /// Only routines with at least one path AND one rule are executed by `run`.
+    fn is_runnable(&self) -> bool {
+        !self.paths.is_empty() && self.has_rules()
+    }
+
     fn print(&self) {
         println!("[{}] {}", self.id, self.name);
         if let Some(d) = &self.description {
@@ -98,8 +113,8 @@ impl Routine {
             println!("    name contains : {v}");
         }
         println!("    include hidden: {}", r.include_hidden);
-        if !self.has_rules() {
-            println!("  warning: no matching rules set - every file would match!");
+        if !self.is_runnable() {
+            println!("  note: not runnable yet - needs at least one path and one rule (`run` skips it)");
         }
     }
 }
@@ -121,12 +136,14 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Create and configure a new, empty routine
+    /// Create a new routine (needs a path and a rule, or use --empty)
     Create(CreateArgs),
     /// Delete one or multiple routines (by id or name)
     Delete(DeleteArgs),
     /// Modify an existing routine (by id or name)
     Modify(ModifyArgs),
+    /// Run all routines and delete the files they match
+    Run(RunArgs),
 }
 
 /// Rule options shared by `create` and `modify`.
@@ -153,6 +170,15 @@ struct CreateArgs {
     /// Optional description
     #[arg(short, long)]
     description: Option<String>,
+    /// Create an empty routine (no paths, no rules); configure it later with `modify`
+    #[arg(
+        long,
+        conflicts_with_all = [
+            "paths", "recursive", "extensions", "include_hidden",
+            "older_than_days", "min_size", "max_size", "name_contains",
+        ]
+    )]
+    empty: bool,
     /// Directory to clean (repeatable)
     #[arg(short, long = "path", value_name = "DIR")]
     paths: Vec<PathBuf>,
@@ -167,6 +193,13 @@ struct CreateArgs {
     include_hidden: bool,
     #[command(flatten)]
     rules: RuleArgs,
+}
+
+#[derive(Args)]
+struct RunArgs {
+    /// Only list what would be deleted; delete nothing
+    #[arg(short = 'n', long)]
+    dry_run: bool,
 }
 
 #[derive(Args)]
@@ -234,6 +267,7 @@ fn main() -> ExitCode {
         Command::Create(a) => cmd_create(&dir, a),
         Command::Delete(a) => cmd_delete(&dir, a),
         Command::Modify(a) => cmd_modify(&dir, a),
+        Command::Run(a) => cmd_run(&dir, a),
     });
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -252,8 +286,27 @@ fn cmd_create(dir: &Path, a: CreateArgs) -> Result<()> {
     let routines = load_all(dir)?;
     validate_name(&a.name, &routines, None)?;
 
+    if a.empty {
+        let routine = Routine {
+            id: next_id(&routines),
+            name: a.name.trim().to_string(),
+            description: a.description,
+            paths: Vec::new(),
+            recursive: false,
+            rules: Rules::default(),
+        };
+        save(dir, &routine)?;
+        println!("Created empty routine:");
+        routine.print();
+        println!(
+            "Configure it with: cleaner modify {} --add-path <DIR> <rule options>",
+            routine.id
+        );
+        return Ok(());
+    }
+
     let mut routine = Routine {
-        id: routines.iter().map(|r| r.id).max().map_or(1, |m| m + 1),
+        id: next_id(&routines),
         name: a.name.trim().to_string(),
         description: a.description,
         paths: Vec::new(),
@@ -274,6 +327,12 @@ fn cmd_create(dir: &Path, a: CreateArgs) -> Result<()> {
         add_ext(&mut routine.rules.extensions, &e);
     }
     validate_sizes(&routine.rules)?;
+    if !routine.is_runnable() {
+        return Err("a routine needs at least one --path and one rule \
+                    (--older-than-days, --min-size, --max-size, --ext, --name-contains); \
+                    use `--empty` to create an empty routine"
+            .into());
+    }
 
     save(dir, &routine)?;
     println!("Created routine:");
@@ -321,6 +380,7 @@ fn cmd_delete(dir: &Path, a: DeleteArgs) -> Result<()> {
 fn cmd_modify(dir: &Path, a: ModifyArgs) -> Result<()> {
     let routines = load_all(dir)?;
     let mut r = resolve(&routines, &a.selector)?.clone();
+    let was_empty = r.is_empty();
 
     if let Some(name) = a.name {
         validate_name(&name, &routines, Some(r.id))?;
@@ -377,6 +437,11 @@ fn cmd_modify(dir: &Path, a: ModifyArgs) -> Result<()> {
         }
     }
     validate_sizes(&r.rules)?;
+    if !was_empty && r.is_empty() {
+        return Err("this change would leave the routine empty; \
+                    keep at least one path or rule (or delete the routine)"
+            .into());
+    }
 
     save(dir, &r)?;
     println!("Modified routine:");
@@ -385,8 +450,184 @@ fn cmd_modify(dir: &Path, a: ModifyArgs) -> Result<()> {
 }
 
 // ---------------------------------------------------------------------------
+// Run
+// ---------------------------------------------------------------------------
+
+#[derive(Default)]
+struct Stats {
+    matched: u64,
+    deleted: u64,
+    bytes: u64,
+    errors: u64,
+}
+
+fn cmd_run(dir: &Path, a: RunArgs) -> Result<()> {
+    let routines = load_all(dir)?;
+    if routines.is_empty() {
+        println!("No routines found.");
+        return Ok(());
+    }
+
+    let now = SystemTime::now();
+    let mut total = Stats::default();
+    let (mut ran, mut skipped) = (0usize, 0usize);
+
+    for r in &routines {
+        if !r.is_runnable() {
+            skipped += 1;
+            eprintln!(
+                "skipping [{}] {}: not fully configured (needs a path and a rule)",
+                r.id, r.name
+            );
+            continue;
+        }
+        ran += 1;
+        println!("Running [{}] {}{}", r.id, r.name, if a.dry_run { " (dry run)" } else { "" });
+
+        let mut s = Stats::default();
+        for root in &r.paths {
+            clean_dir(root, r, now, a.dry_run, &mut s);
+        }
+        println!(
+            "  {} file(s) {}, {}{}",
+            if a.dry_run { s.matched } else { s.deleted },
+            if a.dry_run { "would be deleted" } else { "deleted" },
+            fmt_size(s.bytes),
+            if s.errors > 0 { format!(", {} error(s)", s.errors) } else { String::new() }
+        );
+        total.matched += s.matched;
+        total.deleted += s.deleted;
+        total.bytes += s.bytes;
+        total.errors += s.errors;
+    }
+
+    println!(
+        "Done: {ran} routine(s) run, {skipped} skipped; {} file(s) {}, {}.",
+        if a.dry_run { total.matched } else { total.deleted },
+        if a.dry_run { "would be deleted" } else { "deleted" },
+        fmt_size(total.bytes)
+    );
+    if total.errors > 0 {
+        return Err(format!("{} error(s) occurred while running", total.errors));
+    }
+    Ok(())
+}
+
+/// Iterative directory walk (no recursion, no extra allocations per level).
+/// Symlinks are never followed and never deleted; only regular files are removed.
+fn clean_dir(root: &Path, r: &Routine, now: SystemTime, dry: bool, s: &mut Stats) {
+    match fs::symlink_metadata(root) {
+        Ok(m) if m.is_dir() => {}
+        Ok(_) => {
+            eprintln!("  warning: not a directory: {}", root.display());
+            return;
+        }
+        Err(e) => {
+            eprintln!("  warning: cannot access '{}': {e}", root.display());
+            return;
+        }
+    }
+
+    let rules = &r.rules;
+    let needle = rules.name_contains.as_ref().map(|n| n.to_lowercase());
+    let min_age = rules
+        .older_than_days
+        .map(|d| Duration::from_secs(d.saturating_mul(86_400)));
+
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let entries = match fs::read_dir(&dir) {
+            Ok(e) => e,
+            Err(e) => {
+                s.errors += 1;
+                eprintln!("  error: cannot read '{}': {e}", dir.display());
+                continue;
+            }
+        };
+        for entry in entries.flatten() {
+            let Ok(ft) = entry.file_type() else { continue };
+            let os_name = entry.file_name();
+            let name = os_name.to_string_lossy();
+
+            if !rules.include_hidden && name.starts_with('.') {
+                continue;
+            }
+            if ft.is_dir() {
+                if r.recursive {
+                    stack.push(entry.path());
+                }
+                continue;
+            }
+            if !ft.is_file() {
+                continue; // symlinks, sockets, etc.
+            }
+
+            // Cheap checks on the name first; metadata only if needed.
+            if !rules.extensions.is_empty() {
+                let ext = Path::new(&*name)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| e.to_ascii_lowercase());
+                match ext {
+                    Some(e) if rules.extensions.contains(&e) => {}
+                    _ => continue,
+                }
+            }
+            if let Some(n) = &needle {
+                if !name.to_lowercase().contains(n.as_str()) {
+                    continue;
+                }
+            }
+
+            let Ok(meta) = entry.metadata() else {
+                s.errors += 1;
+                continue;
+            };
+            let size = meta.len();
+            if rules.min_size.is_some_and(|min| size < min)
+                || rules.max_size.is_some_and(|max| size > max)
+            {
+                continue;
+            }
+            if let Some(min_age) = min_age {
+                let old_enough = meta
+                    .modified()
+                    .ok()
+                    .and_then(|m| now.duration_since(m).ok())
+                    .is_some_and(|age| age >= min_age);
+                if !old_enough {
+                    continue;
+                }
+            }
+
+            s.matched += 1;
+            let path = entry.path();
+            if dry {
+                println!("  would delete {}", path.display());
+                s.bytes += size;
+            } else {
+                match fs::remove_file(&path) {
+                    Ok(()) => {
+                        s.deleted += 1;
+                        s.bytes += size;
+                    }
+                    Err(e) => {
+                        s.errors += 1;
+                        eprintln!("  error: cannot delete '{}': {e}", path.display());
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Validation & helpers
 // ---------------------------------------------------------------------------
+
+fn next_id(routines: &[Routine]) -> u32 {
+    routines.iter().map(|r| r.id).max().map_or(1, |m| m + 1)
+}
 
 fn validate_name(name: &str, routines: &[Routine], except_id: Option<u32>) -> Result<()> {
     let name = name.trim();
