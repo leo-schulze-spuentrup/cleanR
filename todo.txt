@@ -1,0 +1,25 @@
+TODO:
+
+##########################
+cleanR create
+- Move Extension to rules
+- 
+
+##########################
+cleanR delete
+-
+
+##########################
+cleanR modify
+- One add parameter?
+- One remove parameter
+
+##########################
+cleanR run
+- Running specific routines by using cleanR run <NAME, LIST>
+- 
+
+IDEAS FEATURES:
+Make a sheduler that is able to run routines at specific times
+
+
